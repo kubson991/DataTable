@@ -1,0 +1,29 @@
+{
+  "name": "superTable",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "nuxt",
+    "build": "nuxt build",
+    "start": "nuxt start",
+    "generate": "nuxt generate"
+  },
+  "dependencies": {
+    "bootstrap": "^4.6.1",
+    "bootstrap-datepicker": "^1.9.0",
+    "bootstrap-vue": "^2.21.2",
+    "core-js": "^3.19.3",
+    "nuxt": "^2.15.8",
+    "v-calendar": "^2.3.0",
+    "vue": "^2.6.14",
+    "vue-select": "^3.20.2",
+    "vue-server-renderer": "^2.6.14",
+    "vue-template-compiler": "^2.6.14",
+    "webpack": "^4.46.0"
+  },
+  "devDependencies": {
+    "fibers": "^5.0.3",
+    "sass": "^1.64.1",
+    "sass-loader": "^10.4.1"
+  }
+}
