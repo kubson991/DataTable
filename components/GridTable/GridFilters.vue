@@ -17,7 +17,7 @@ export default {
   },
   methods: {
     emitInputValue(e) {
-      this.$emit(e.target.value);
+      this.$emit('filterChange',e.target.value);
     },
   },
 };

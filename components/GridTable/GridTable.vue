@@ -26,7 +26,7 @@
       <p class="elementsCounter">
         {{ dataOrdered.length }} Elements of {{ this.totalElements }}
       </p>
-      <div class="form-check form-switch">
+      <div class="form-check form-switch" v-show="tableConfig.activeFilters">
         <input
           v-model="activeFilters"
           class="form-check-input"
@@ -82,12 +82,13 @@
             v-for="(filter, index) in columnsRendered"
             :key="filter.value"
             :style="{
-              'min-width': widthColumnArray[index] + 'px',
-              'max-width': widthColumnArray[index] + 'px',
+              'min-width': widthColumnArray[index],
+              'max-width': widthColumnArray[index],
             }"
           >
             <GridFilter
-              @input="columnFilterChange($event, filter)"
+              :column="filter.value"
+              @filterChange="columnFilterChange($event, filter)"
             ></GridFilter>
           </div>
         </nav>
@@ -106,7 +107,9 @@
             <section v-if="!tableConfig.groupBy" @scroll.passive="hideModal">
               <GridRow
                 v-for="(rowData, index) in dataOrdered"
-                :key="index"
+                :key="
+                  tableConfig.key ? getParam(rowData, tableConfig.key) : index
+                "
                 class="tableComponentRow"
                 :rowData="rowData"
                 :columns="columnsRendered"
@@ -166,7 +169,9 @@
                 </section>
                 <GridRow
                   v-for="(rowData, index) in group.elements"
-                  :key="index"
+                  :key="
+                    tableConfig.key ? getParam(rowData, tableConfig.key) : index
+                  "
                   class="tableComponentRow"
                   :rowData="rowData"
                   :columns="columnsRendered"
@@ -199,7 +204,7 @@
       <section class="quantityPerPageContainer">
         <span>Mostrar</span>
         <div class="selectContainer">
-          <select v-model="quantityPerPage">
+          <select v-model="quantityPerPage" @input="quantiTyChange">
             <option
               :selected="index === 0"
               :value="quantity"
@@ -283,7 +288,7 @@ export default {
     },
     tableConfig: {
       type: Object,
-      default: { groupBy: null, activeFilters: false },
+      default: { groupBy: null, activeFilters: false, key: null },
     },
     paginator: {
       default: () => true,
@@ -321,6 +326,7 @@ export default {
       scrollRange: 0,
       virtualScrollHeight: 0,
       thumbHeight: 30,
+      filters: {},
     };
   },
   beforeMount() {
@@ -355,15 +361,52 @@ export default {
     }
   },
   methods: {
+    quantiTyChange(e) {
+      const value = e.target.value;
+      this.quantityPerPage = value;
+      this.$emit("onRegistersNumberChange", value);
+      this.pageRender = 1;
+      if (this.ajaxTable) {
+        this.manageAjaxMode();
+      } else {
+        this.setTotalPages();
+      }
+    },
     setScroll(e) {
       this.scrollPosition = e.target.scrollTop;
     },
     scrollTable(e) {
       this.$refs.scrollContainer.scrollTop = e.target.value;
     },
-    columnFilterChange(a, b) {
-      console.log(a);
-      console.log(b);
+    columnFilterChange(value, columnInfo) {
+      this.filters[columnInfo.value] = value;
+      this.applyFilters();
+      this.setTotalPages();
+      this.setElemetsForView();
+      this.groupRows();
+    },
+    applyFilters() {
+      let filteredElements = [...this.dataCopy];
+      for (const column in this.filters) {
+        const filterValue = this.filters[column];
+        if (Object.hasOwnProperty.call(this.filters, column)) {
+          if (filterValue) {
+            filteredElements = filteredElements.filter((row) => {
+              const rowValue = this.getParam(row, column)
+                ? (this.getParam(row, column) + "").toLowerCase()
+                : "";
+              if (rowValue) {
+                return rowValue.includes(
+                  (this.filters[column] + "").toLowerCase()
+                );
+              } else {
+                return false;
+              }
+            });
+          }
+        }
+      }
+      this.rowsWithFiltersApplied = [...filteredElements];
     },
     obeserverConfig() {
       if (this.observer) {
@@ -445,11 +488,16 @@ export default {
       }
     },
     setTotalPages() {
-      if (this.dataCopy.length <= 0 || this.quantityPerPage <= 0) {
+      if (
+        this.rowsWithFiltersApplied.length <= 0 ||
+        this.quantityPerPage <= 0
+      ) {
         return 0;
       }
-      this.totalElements = this.dataCopy.length;
-      const totalPages = Math.ceil(this.dataCopy.length / this.quantityPerPage);
+      this.totalElements = this.rowsWithFiltersApplied.length;
+      const totalPages = Math.ceil(
+        this.rowsWithFiltersApplied.length / this.quantityPerPage
+      );
       this.totalPagesRender = totalPages;
     },
     addRow(newRow) {
@@ -463,6 +511,10 @@ export default {
           if (rule(this.dataOrdered[i])) {
             elementsDeleted.push(this.dataOrdered.splice(i, 1)[0]);
           }
+          this.$emit("elementDeleted", {
+            elementsDeleted,
+            newData: this.dataOrdered,
+          });
         }
       } else {
         for (let i = this.dataCopy.length - 1; i >= 0; i--) {
@@ -470,9 +522,14 @@ export default {
             elementsDeleted.push(this.dataCopy.splice(i, 1)[0]);
           }
         }
+        this.applyFilters();
         this.setTotalPages();
         this.setElemetsForView();
         this.groupRows();
+        this.$emit("elementDeleted", {
+          elementsDeleted,
+          newData: this.dataCopy,
+        });
       }
 
       this.$emit("elementDeleted", {
@@ -503,17 +560,9 @@ export default {
       }
       this.ajaxFunction(info, this.setAjaxInfo);
     },
-    setAjaxInfo({
-      data,
-      page,
-      totalPages,
-      quantityPerPage,
-      totalElements = 0,
-    }) {
+    setAjaxInfo({ data, totalPages = 1, totalElements = 0 }) {
       this.dataOrdered = [...data];
-      this.pageRender = page;
       this.totalPagesRender = totalPages;
-      this.quantityPerPage = quantityPerPage;
       this.totalElements = totalElements;
       this.groupRows();
     },
@@ -578,8 +627,9 @@ export default {
         const children = header.children;
         for (let i = 0; i < children.length; i++) {
           const hijo = children[i];
-          console.log(hijo)
-          const anchoHijo = hijo.offsetWidth;
+          const anchoHijo = window
+            .getComputedStyle(hijo)
+            .getPropertyValue("width");
           this.widthColumnArray.push(anchoHijo);
         }
       }
@@ -624,14 +674,14 @@ export default {
       const columValue = header.value;
       switch (variableType) {
         case "number":
-          this.orderByNumber(columValue, this.dataCopy);
-          this.dataOrdered = [...this.dataCopy];
+          this.orderByNumber(columValue, this.rowsWithFiltersApplied);
+          this.dataOrdered = [...this.rowsWithFiltersApplied];
           this.setActualPage(1);
           break;
 
         case "string":
-          this.orderByString(columValue, this.dataCopy);
-          this.dataOrdered = [...this.dataCopy];
+          this.orderByString(columValue, this.rowsWithFiltersApplied);
+          this.dataOrdered = [...this.rowsWithFiltersApplied];
           this.setActualPage(1);
           break;
 
@@ -718,6 +768,7 @@ export default {
     },
     initOfflineTable() {
       this.dataCopy = [...this.data];
+      this.rowsWithFiltersApplied = [...this.data];
       this.setTotalPages();
       this.setElemetsForView();
       this.groupRows();
@@ -735,10 +786,14 @@ export default {
           ? 0
           : (this.pageRender - 1) * this.quantityPerPage;
       let lastIndex = firstIndex + this.quantityPerPage;
-      if (lastIndex > this.dataCopy.length) {
-        lastIndex = this.dataCopy.length;
+      if (lastIndex > this.rowsWithFiltersApplied.length) {
+        lastIndex = this.rowsWithFiltersApplied.length;
       }
-      this.dataOrdered = this.dataCopy.slice(firstIndex, lastIndex);
+      this.dataOrdered = this.rowsWithFiltersApplied.slice(
+        firstIndex,
+        lastIndex
+      );
+      2;
     },
   },
   destroyed() {
@@ -753,25 +808,15 @@ export default {
     ajaxTable() {
       this.manageAjaxMode();
     },
-    quantityPerPage(pages) {
-      this.$emit("onRegistersNumberChange", pages);
-      if (this.ajaxTable) {
-        this.manageAjaxMode();
-      } else {
-        this.setTotalPages();
-        this.setActualPage(1);
-      }
-    },
     columns() {
       this.obeserverConfig();
     },
-    'gridGlobalConfig.groupBy'(){
-      this.$nextTick(()=>{
-      this.watchcolumnsSize()
-
-      }
-      )
-    }
+    tableConfig: {
+      handler() {
+        this.obeserverConfig();
+      },
+      deep: true,
+    },
   },
   computed: {
     pagesToShow() {
@@ -1145,10 +1190,11 @@ section {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
   &::-webkit-scrollbar {
-    width: 0; /* For Chrome, Safari, and Opera */
+    width: 0px; /* For Chrome, Safari, and Opera */
   }
 
   &::-webkit-scrollbar-thumb {
+    width: 0px;
     background: transparent; /* For Chrome, Safari, and Opera */
   }
 }
@@ -1182,6 +1228,7 @@ section {
   }
 }
 .slider {
+  cursor: initial;
   --thumbHeight: 20px;
   background-color: $scrollbarBackground;
   position: absolute;
@@ -1198,7 +1245,7 @@ section {
   border-radius: 5px;
   -webkit-appearance: none; /* Override default look */
   appearance: none;
-  height: 5px; /* Set a specific slider handle width */
+  height: 3px; /* Set a specific slider handle width */
   width: var(--thumbHeight); /* Slider handle height */
   background: $scrollbarThumb; /* Green background */
   cursor: pointer; /* Cursor on hover */
@@ -1206,7 +1253,7 @@ section {
 
 .slider::-moz-range-thumb {
   border-radius: 5px;
-  height: 5px; /* Set a specific slider handle width */
+  height: 3px; /* Set a specific slider handle width */
   width: var(--thumbHeight); /* Slider handle height */
   background: $scrollbarThumb; /* Green background */
   cursor: pointer; /* Cursor on hover */

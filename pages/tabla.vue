@@ -61,6 +61,8 @@ export default {
       deleteRow:null,
       gridGlobalConfig: {
         groupBy: "gender",
+        activeFilters:true,
+        key:'document'
       },
       tableLoader: false,
       customFilterGender: null,

@@ -6,7 +6,7 @@
       :key="column.value"
       class="tableComponentColumn"
       :style="{
-        '--width': widthColumnArray[index] + 'px',
+        '--width': widthColumnArray[index],
       }"
     >
       <slot

@@ -150,9 +150,8 @@ export default {
       );
       callBack({
         data: response.data,
-        page: tableInfo.page,
         totalPages: response.totalPages,
-        quantityPerPage: tableInfo.quantityPerPage,
+        totalElements:78,
       });
       this.tableLoader = false;
     },
